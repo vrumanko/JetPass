@@ -1,0 +1,1183 @@
+<!doctype html>
+<html lang="sk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<!-- Nothing may be loaded or sent over the network: the app is fully offline. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'">
+<meta name="description" content="JetPass – generate consistent passwords from serial numbers and other inputs. Offline, in your browser.">
+<title>JetPass</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%234f46e5'/%3E%3Cpath d='M12 33 52 14 41 50 32 39Z' fill='white'/%3E%3C/svg%3E">
+<style>
+:root {
+  --bg: #f4f6fb; --card: #ffffff; --text: #0f172a; --muted: #64748b; --line: #e2e8f0;
+  --field: #f8fafc; --field-focus: #ffffff;
+  --accent: #4f46e5; --accent-2: #06b6d4; --accent-soft: #eef2ff; --on-accent: #ffffff;
+  --warn: #9a5b06; --warn-bg: #fff8eb; --warn-line: #fcd9a0;
+  --ok: #047857; --ok-bg: #ecfdf5; --ok-line: #a7f3d0;
+  --err: #b91c1c;
+  --digit: #4f46e5; --sym: #c026d3;
+  --shadow: 0 1px 2px rgb(15 23 42 / .04), 0 12px 32px -12px rgb(15 23 42 / .14);
+  --blob-1: rgb(99 102 241 / .16); --blob-2: rgb(6 182 212 / .14);
+  --radius: 18px;
+}
+:root[data-theme="dark"] {
+  --bg: #0a0f1e; --card: #111a2e; --text: #e6e9f2; --muted: #94a3b8; --line: #22304d;
+  --field: #0c1427; --field-focus: #0f1a33;
+  --accent: #818cf8; --accent-2: #22d3ee; --accent-soft: #1b2346; --on-accent: #0a0f1e;
+  --warn: #fbbf24; --warn-bg: #2a1d07; --warn-line: #5b4210;
+  --ok: #34d399; --ok-bg: #062a20; --ok-line: #0f5d44;
+  --err: #f87171;
+  --digit: #a5b4fc; --sym: #f0abfc;
+  --shadow: 0 1px 2px rgb(0 0 0 / .3), 0 16px 40px -16px rgb(0 0 0 / .6);
+  --blob-1: rgb(99 102 241 / .18); --blob-2: rgb(34 211 238 / .10);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0a0f1e; --card: #111a2e; --text: #e6e9f2; --muted: #94a3b8; --line: #22304d;
+    --field: #0c1427; --field-focus: #0f1a33;
+    --accent: #818cf8; --accent-2: #22d3ee; --accent-soft: #1b2346; --on-accent: #0a0f1e;
+    --warn: #fbbf24; --warn-bg: #2a1d07; --warn-line: #5b4210;
+    --ok: #34d399; --ok-bg: #062a20; --ok-line: #0f5d44;
+    --err: #f87171;
+    --digit: #a5b4fc; --sym: #f0abfc;
+    --shadow: 0 1px 2px rgb(0 0 0 / .3), 0 16px 40px -16px rgb(0 0 0 / .6);
+    --blob-1: rgb(99 102 241 / .18); --blob-2: rgb(34 211 238 / .10);
+  }
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; min-height: 100vh; color: var(--text); background: var(--bg);
+  background-image:
+    radial-gradient(40rem 28rem at 10% -10%, var(--blob-1), transparent 70%),
+    radial-gradient(36rem 26rem at 110% 10%, var(--blob-2), transparent 70%);
+  background-attachment: fixed;
+  font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  padding: 24px 16px 40px;
+  transition: background-color .3s, color .3s;
+}
+.app { max-width: 580px; margin: 0 auto; }
+button, input, select { font: inherit; color: inherit; }
+svg.i { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+[hidden] { display: none !important; }
+
+/* Header */
+header { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; }
+.brand { display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1; }
+.brand h1 { margin: 0; font-size: 1.5rem; line-height: 1.1; letter-spacing: -.02em; }
+.brand p { margin: 2px 0 0; color: var(--muted); font-size: .88rem; }
+.logo { width: 48px; height: 48px; flex: none; border-radius: 14px; box-shadow: 0 8px 20px -8px rgb(79 70 229 / .6); }
+.logo .plane { transform-box: fill-box; transform-origin: center; animation: float 4s ease-in-out infinite; }
+.logo .trail { animation: dash 1.1s linear infinite; }
+.logo.fly .plane { animation: fly .75s cubic-bezier(.5, 0, .3, 1); }
+@keyframes float { 0%, 100% { transform: translate(0, 0); } 50% { transform: translate(1.5px, -2.5px); } }
+@keyframes dash { to { stroke-dashoffset: 20; } }
+@keyframes fly {
+  0% { transform: translate(0, 0); opacity: 1; }
+  45% { transform: translate(26px, -22px); opacity: 0; }
+  46% { transform: translate(-26px, 22px); opacity: 0; }
+  100% { transform: translate(0, 0); opacity: 1; }
+}
+.tools { display: flex; gap: 6px; align-items: center; }
+.icon-btn {
+  display: inline-grid; place-items: center; width: 40px; height: 40px; padding: 0; position: relative;
+  border: 1px solid var(--line); background: var(--card); color: var(--muted); border-radius: 12px; cursor: pointer;
+  transition: color .2s, border-color .2s, background .2s, transform .1s;
+}
+.icon-btn:hover { color: var(--text); border-color: var(--accent); }
+.icon-btn:active { transform: scale(.95); }
+.icon-btn[aria-expanded="true"] { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+.icon-btn .dot { position: absolute; top: 6px; right: 6px; width: 8px; height: 8px; border-radius: 50%; background: var(--accent-2); box-shadow: 0 0 0 2px var(--card); }
+.lang {
+  height: 40px; padding: 0 10px; border: 1px solid var(--line); background: var(--card); color: var(--text);
+  border-radius: 12px; cursor: pointer; font-size: .9rem;
+}
+.theme-btn svg { display: none; }
+.theme-btn[data-mode="auto"] .t-auto, .theme-btn[data-mode="light"] .t-light, .theme-btn[data-mode="dark"] .t-dark { display: block; }
+
+/* Card */
+.card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 22px; transition: background-color .3s, border-color .3s; }
+.field + .field { margin-top: 16px; }
+.field > label, .label { display: block; font-weight: 600; font-size: .9rem; margin-bottom: 6px; }
+.control { display: flex; align-items: center; gap: 0; background: var(--field); border: 1.5px solid var(--line); border-radius: 12px; transition: border-color .2s, box-shadow .2s, background .2s; }
+.control:focus-within { border-color: var(--accent); background: var(--field-focus); box-shadow: 0 0 0 4px var(--accent-soft); }
+.control input { flex: 1; min-width: 0; border: 0; background: transparent; outline: 0; padding: 12px 14px; font-size: 1.05rem; }
+.control input::placeholder { color: var(--muted); opacity: .8; }
+.control .icon-btn { border: 0; background: transparent; width: 44px; height: 44px; margin-right: 2px; }
+.control .icon-btn:hover { background: var(--accent-soft); }
+.eye .i-off { display: none; }
+.eye[aria-pressed="false"] .i-on { display: none; }
+.eye[aria-pressed="false"] .i-off { display: block; }
+
+.notice { display: flex; gap: 8px; align-items: flex-start; margin: 8px 0 0; padding: 9px 12px; border-radius: 10px; font-size: .86rem; line-height: 1.4; border: 1px solid; transition: background .25s, color .25s, border-color .25s; }
+.notice svg.i { width: 18px; height: 18px; margin-top: 1px; }
+.notice.warn { color: var(--warn); background: var(--warn-bg); border-color: var(--warn-line); }
+.notice.ok { color: var(--ok); background: var(--ok-bg); border-color: var(--ok-line); }
+.notice .i-ok { display: none; }
+.notice.ok .i-ok { display: block; }
+.notice.ok .i-warn { display: none; }
+
+/* Output */
+.out { margin-top: 22px; padding-top: 20px; border-top: 1px dashed var(--line); }
+.out-box { display: flex; align-items: center; gap: 8px; padding: 8px 8px 8px 16px; min-height: 64px; border-radius: 14px; background: var(--accent-soft); border: 1.5px solid transparent; }
+.out-box output {
+  flex: 1; min-width: 0; overflow-wrap: anywhere; font: 600 1.35rem/1.35 ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  letter-spacing: .04em;
+}
+.out-box output.pop { animation: pop .35s ease-out; }
+@keyframes pop { from { opacity: 0; transform: translateY(4px); filter: blur(3px); } to { opacity: 1; transform: none; filter: none; } }
+.out-box output.placeholder, .out-box output.busy { font: 400 1rem/1.4 inherit; font-family: inherit; color: var(--muted); letter-spacing: 0; }
+.out-box output.error { font: 500 .95rem/1.4 inherit; font-family: inherit; color: var(--err); letter-spacing: 0; }
+.out-box output .g { display: inline-block; margin-right: .45em; }
+.out-box output .g:last-child { margin-right: 0; }
+.out-box output .d { color: var(--digit); }
+.out-box output .s { color: var(--sym); }
+.out-box .icon-btn { background: transparent; border-color: transparent; }
+.out-box .icon-btn:hover { background: var(--card); }
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 44px; padding: 0 16px; border-radius: 12px;
+  border: 1px solid var(--line); background: var(--card); cursor: pointer; font-weight: 600; white-space: nowrap;
+  transition: background .2s, color .2s, border-color .2s, transform .1s, box-shadow .2s;
+}
+.btn:hover { border-color: var(--accent); }
+.btn:active { transform: scale(.97); }
+.btn:disabled { opacity: .5; cursor: default; transform: none; }
+.btn.primary { background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: var(--on-accent); border: 0; box-shadow: 0 6px 18px -8px var(--accent); }
+.btn.primary.done { background: var(--ok); }
+.btn .i-check { display: none; }
+.btn.done .i-copy { display: none; }
+.btn.done .i-check { display: block; animation: pop .3s ease-out; }
+.btn.small { height: 38px; padding: 0 12px; font-size: .9rem; }
+.summary { margin: 12px 2px 0; color: var(--muted); font-size: .8rem; font-family: ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace; overflow-wrap: anywhere; }
+
+/* Advanced */
+.adv { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .35s ease, margin .35s ease; margin-top: 0; }
+.adv.open { grid-template-rows: 1fr; margin-top: 16px; }
+.adv > div { overflow: hidden; min-height: 0; }
+.adv h2 { margin: 0 0 4px; font-size: 1.1rem; }
+.adv .note { margin: 0 0 16px; color: var(--muted); font-size: .88rem; }
+fieldset { border: 0; margin: 0; padding: 16px 0; border-top: 1px solid var(--line); min-width: 0; }
+legend { padding: 0; font-weight: 700; font-size: .78rem; text-transform: uppercase; letter-spacing: .08em; color: var(--accent); margin-bottom: 10px; float: left; width: 100%; }
+legend + * { clear: both; }
+.row { display: grid; grid-template-columns: 150px 1fr; gap: 6px 14px; align-items: center; margin-top: 10px; }
+.row:first-of-type { margin-top: 0; }
+.row > label { font-size: .9rem; color: var(--text); }
+.check { display: flex; gap: 10px; align-items: flex-start; margin-top: 10px; font-size: .9rem; cursor: pointer; }
+.check input { width: 18px; height: 18px; margin: 2px 0 0; accent-color: var(--accent); flex: none; cursor: pointer; }
+.check.disabled { opacity: .45; cursor: default; }
+.inp, .sel {
+  width: 100%; min-width: 0; height: 40px; padding: 0 12px; border: 1.5px solid var(--line); border-radius: 10px;
+  background: var(--field); outline: 0; transition: border-color .2s, box-shadow .2s;
+}
+.inp:focus, .sel:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.inp:disabled, .sel:disabled { opacity: .45; }
+.mono { font-family: ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace; font-size: .9rem; }
+.len { display: flex; gap: 10px; align-items: center; }
+.len input[type="range"] { flex: 1; accent-color: var(--accent); min-width: 0; }
+.len .inp { width: 76px; flex: none; text-align: center; }
+.hint { margin: 8px 0 0; color: var(--muted); font-size: .82rem; }
+.hint.warn { color: var(--warn); }
+.pair { display: flex; gap: 8px; }
+.pair .inp { flex: 1; }
+.status { min-height: 1.3em; margin: 6px 0 0; font-size: .85rem; }
+.status.ok { color: var(--ok); }
+.status.bad { color: var(--err); }
+.actions { display: flex; justify-content: flex-end; padding-top: 14px; border-top: 1px solid var(--line); }
+
+footer { margin-top: 22px; text-align: center; color: var(--muted); font-size: .82rem; }
+footer p { margin: 4px 0; }
+footer a { color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.control input:focus-visible { outline: 0; }
+
+@media (max-width: 520px) {
+  body { padding-top: 16px; }
+  .brand p { display: none; }
+  .card { padding: 18px 16px; }
+  .row { grid-template-columns: 1fr; }
+  .out-box { flex-wrap: wrap; padding: 12px; }
+  .out-box output { flex-basis: 100%; }
+  .out-box .btn.primary { flex: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="brand">
+      <svg class="logo" id="logo" viewBox="0 0 64 64" aria-hidden="true">
+        <defs>
+          <linearGradient id="lg" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#6366f1"/><stop offset="1" stop-color="#06b6d4"/>
+          </linearGradient>
+        </defs>
+        <rect width="64" height="64" rx="16" fill="url(#lg)"/>
+        <g class="trail" stroke="#fff" stroke-opacity=".75" stroke-width="3" stroke-linecap="round" stroke-dasharray="5 5" fill="none">
+          <path d="M23 44 9 51"/><path d="M20 37 8 42"/>
+        </g>
+        <g class="plane">
+          <path d="M12 33 52 14 41 50 32 39Z" fill="#fff"/>
+          <path d="M32 39 52 14 27 41Z" fill="#c7d2fe"/>
+        </g>
+      </svg>
+      <div>
+        <h1>JetPass</h1>
+        <p data-i18n="tagline"></p>
+      </div>
+    </div>
+    <div class="tools">
+      <select class="lang" id="lang" data-i18n-title="language">
+        <option value="sk">SK</option><option value="en">EN</option><option value="de">DE</option><option value="es">ES</option>
+      </select>
+      <button class="icon-btn theme-btn" id="themeBtn" type="button">
+        <svg class="i t-auto" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor"/></svg>
+        <svg class="i t-light" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+        <svg class="i t-dark" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+      </button>
+      <button class="icon-btn" id="advBtn" type="button" aria-expanded="false" aria-controls="adv" data-i18n-title="advanced">
+        <svg class="i" viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg>
+        <span class="dot" id="advDot" hidden></span>
+      </button>
+    </div>
+  </header>
+
+  <main class="card">
+    <div class="field">
+      <label for="input" data-i18n="inputLabel"></label>
+      <div class="control">
+        <input id="input" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-i18n-ph="inputPh">
+        <button class="icon-btn eye" type="button" data-eye="input" aria-pressed="true">
+          <svg class="i i-on" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
+          <svg class="i i-off" viewBox="0 0 24 24"><path d="M10.6 5.1A10.7 10.7 0 0 1 12 5c6.5 0 10 7 10 7a17.6 17.6 0 0 1-3.2 4.2M6.6 6.6C3.7 8.5 2 12 2 12s3.5 7 10 7c1.9 0 3.5-.6 4.9-1.4M9.9 9.9a3 3 0 0 0 4.2 4.2M3 3l18 18"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="secret" data-i18n="secretLabel"></label>
+      <div class="control">
+        <input id="secret" type="password" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-i18n-ph="secretPh">
+        <button class="icon-btn eye" type="button" data-eye="secret" aria-pressed="false">
+          <svg class="i i-on" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
+          <svg class="i i-off" viewBox="0 0 24 24"><path d="M10.6 5.1A10.7 10.7 0 0 1 12 5c6.5 0 10 7 10 7a17.6 17.6 0 0 1-3.2 4.2M6.6 6.6C3.7 8.5 2 12 2 12s3.5 7 10 7c1.9 0 3.5-.6 4.9-1.4M9.9 9.9a3 3 0 0 0 4.2 4.2M3 3l18 18"/></svg>
+        </button>
+      </div>
+      <p class="notice warn" id="secretNotice" role="note">
+        <svg class="i i-warn" viewBox="0 0 24 24"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0zM12 9v4M12 17h.01"/></svg>
+        <svg class="i i-ok" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
+        <span id="secretNoticeText"></span>
+      </p>
+    </div>
+
+    <div class="out">
+      <span class="label" id="outLabel" data-i18n="outputLabel"></span>
+      <div class="out-box">
+        <output id="output" aria-labelledby="outLabel" aria-live="polite"></output>
+        <button class="icon-btn eye" type="button" data-eye="output" aria-pressed="true">
+          <svg class="i i-on" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
+          <svg class="i i-off" viewBox="0 0 24 24"><path d="M10.6 5.1A10.7 10.7 0 0 1 12 5c6.5 0 10 7 10 7a17.6 17.6 0 0 1-3.2 4.2M6.6 6.6C3.7 8.5 2 12 2 12s3.5 7 10 7c1.9 0 3.5-.6 4.9-1.4M9.9 9.9a3 3 0 0 0 4.2 4.2M3 3l18 18"/></svg>
+        </button>
+        <button class="btn primary" id="copyBtn" type="button" disabled>
+          <svg class="i i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          <svg class="i i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>
+          <span id="copyText"></span>
+        </button>
+      </div>
+      <p class="summary" id="summary"></p>
+    </div>
+  </main>
+
+  <section class="adv" id="adv" inert>
+    <div>
+      <div class="card">
+        <h2 data-i18n="advanced"></h2>
+        <p class="note" data-i18n="advNote"></p>
+
+        <fieldset>
+          <legend data-i18n="grpInput"></legend>
+          <label class="check"><input type="checkbox" data-set="trim"><span data-i18n="trim"></span></label>
+          <label class="check"><input type="checkbox" data-set="strip"><span data-i18n="strip"></span></label>
+          <div class="row" style="margin-top:12px">
+            <label for="s-case" data-i18n="textCase"></label>
+            <select class="sel" id="s-case" data-set="textCase">
+              <option value="keep" data-i18n="case_keep"></option>
+              <option value="upper" data-i18n="case_upper"></option>
+              <option value="lower" data-i18n="case_lower"></option>
+            </select>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend data-i18n="grpAlgo"></legend>
+          <div class="row">
+            <label for="s-algo" data-i18n="algo"></label>
+            <select class="sel" id="s-algo" data-set="algo"></select>
+          </div>
+          <div class="row" id="iterRow">
+            <label for="s-iter" data-i18n="iter"></label>
+            <input class="inp" id="s-iter" type="number" min="1000" max="1000000" step="1000" data-set="iter">
+          </div>
+          <div class="row">
+            <label for="s-order" data-i18n="order"></label>
+            <select class="sel" id="s-order" data-set="order">
+              <option value="is" data-i18n="order_is"></option>
+              <option value="si" data-i18n="order_si"></option>
+            </select>
+          </div>
+          <div class="row">
+            <label for="s-sep" data-i18n="sep"></label>
+            <input class="inp mono" id="s-sep" type="text" maxlength="16" spellcheck="false" autocomplete="off" data-set="sep" data-i18n-ph="sepPh">
+          </div>
+          <p class="hint" id="keyedNote" data-i18n="keyedNote"></p>
+        </fieldset>
+
+        <fieldset>
+          <legend data-i18n="grpOutput"></legend>
+          <div class="row">
+            <label for="s-charset" data-i18n="charset"></label>
+            <select class="sel" id="s-charset" data-set="charset">
+              <option value="alnum" data-i18n="cs_alnum"></option>
+              <option value="upperdigits" data-i18n="cs_upperdigits"></option>
+              <option value="lowerdigits" data-i18n="cs_lowerdigits"></option>
+              <option value="digits" data-i18n="cs_digits"></option>
+              <option value="symbols" data-i18n="cs_symbols"></option>
+              <option value="hex" data-i18n="cs_hex"></option>
+              <option value="custom" data-i18n="cs_custom"></option>
+            </select>
+          </div>
+          <div class="row" id="customRow">
+            <label for="s-custom" data-i18n="custom"></label>
+            <input class="inp mono" id="s-custom" type="text" maxlength="256" spellcheck="false" autocomplete="off" data-set="custom" data-i18n-ph="customPh">
+          </div>
+          <div class="row">
+            <label for="s-length" data-i18n="length"></label>
+            <div class="len">
+              <input type="range" min="4" max="64" data-set="length" data-i18n-title="length">
+              <input class="inp" id="s-length" type="number" min="4" max="64" data-set="length">
+            </div>
+          </div>
+          <label class="check" id="c-noAmbig"><input type="checkbox" data-set="noAmbig"><span data-i18n="noAmbig"></span></label>
+          <label class="check" id="c-noYZ"><input type="checkbox" data-set="noYZ"><span data-i18n="noYZ"></span></label>
+          <label class="check" id="c-mix"><input type="checkbox" data-set="mix"><span data-i18n="mix"></span></label>
+          <p class="hint warn" id="symWarn" data-i18n="symWarn"></p>
+          <div class="row" style="margin-top:14px">
+            <label for="s-prefix" data-i18n="prefix"></label>
+            <input class="inp mono" id="s-prefix" type="text" maxlength="32" spellcheck="false" autocomplete="off" data-set="prefix">
+          </div>
+          <div class="row">
+            <label for="s-suffix" data-i18n="suffix"></label>
+            <input class="inp mono" id="s-suffix" type="text" maxlength="32" spellcheck="false" autocomplete="off" data-set="suffix">
+          </div>
+          <p class="hint" data-i18n="affixNote"></p>
+        </fieldset>
+
+        <fieldset>
+          <legend data-i18n="grpDisplay"></legend>
+          <label class="check"><input type="checkbox" id="groupChk"><span data-i18n="group"></span></label>
+        </fieldset>
+
+        <fieldset>
+          <legend data-i18n="grpProfile"></legend>
+          <p class="hint" style="margin-top:0" data-i18n="profileHelp"></p>
+          <div class="pair" style="margin-top:10px">
+            <input class="inp mono" id="profileOut" type="text" readonly data-i18n-title="grpProfile">
+            <button class="btn small" id="copyProfile" type="button"><span data-i18n="copy"></span></button>
+          </div>
+          <div class="pair" style="margin-top:8px">
+            <input class="inp mono" id="profileIn" type="text" spellcheck="false" autocomplete="off" data-i18n-ph="profileIn">
+            <button class="btn small" id="applyProfile" type="button"><span data-i18n="apply"></span></button>
+          </div>
+          <p class="status" id="profileStatus" role="status"></p>
+        </fieldset>
+
+        <div class="actions">
+          <button class="btn small" id="resetBtn" type="button"><span data-i18n="reset"></span></button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <p data-i18n="footer"></p>
+    <p>JetPass · <span data-i18n="openSource"></span> · <a href="https://github.com/vrumanko/JetPass" rel="noopener">GitHub</a></p>
+  </footer>
+</div>
+<noscript><p style="text-align:center">JetPass needs JavaScript. / JetPass potrebuje JavaScript.</p></noscript>
+
+<script>
+/* JP-CORE-START
+ * Password derivation core. Pure JavaScript, no dependencies.
+ * Any change here can change generated passwords - run `node tests/run.mjs` before committing.
+ */
+const JP = (() => {
+  'use strict';
+  const enc = new TextEncoder();
+
+  // ---- Hash constants, derived from prime roots (avoids hand-typed tables) ----
+  function firstPrimes(n) {
+    const out = [];
+    for (let x = 2; out.length < n; x++) if (out.every(p => x % p)) out.push(x);
+    return out;
+  }
+  function iroot(n, k) { // floor of the k-th root of BigInt n
+    if (n < 2n) return n;
+    let x = 1n << (BigInt(n.toString(2).length) / k + 1n);
+    for (;;) {
+      const y = ((k - 1n) * x + n / x ** (k - 1n)) / k;
+      if (y >= x) return x;
+      x = y;
+    }
+  }
+  const frac = (p, k, bits) => iroot(BigInt(p) << (BigInt(bits) * k), k) & ((1n << BigInt(bits)) - 1n);
+  const PR = firstPrimes(80);
+  const H256 = Int32Array.from(PR.slice(0, 8), p => Number(frac(p, 2n, 32)) | 0);
+  const K256 = Int32Array.from(PR.slice(0, 64), p => Number(frac(p, 3n, 32)) | 0);
+  const H512 = PR.slice(0, 8).map(p => frac(p, 2n, 64));
+  const K512 = PR.map(p => frac(p, 3n, 64));
+  const H160 = Int32Array.from([0x67452301, 0xEFCDAB89, 0x98BADCFE, 0x10325476, 0xC3D2E1F0], x => x | 0);
+  const M64 = (1n << 64n) - 1n;
+
+  const concat = (...parts) => {
+    const out = new Uint8Array(parts.reduce((s, p) => s + p.length, 0));
+    let i = 0;
+    for (const p of parts) { out.set(p, i); i += p.length; }
+    return out;
+  };
+  function pad(msg, block, lenBytes) {
+    const l = msg.length, n = Math.ceil((l + 1 + lenBytes) / block) * block;
+    const m = new Uint8Array(n);
+    m.set(msg); m[l] = 0x80;
+    const dv = new DataView(m.buffer), bits = l * 8;
+    dv.setUint32(n - 4, bits >>> 0);
+    dv.setUint32(n - 8, Math.floor(bits / 4294967296));
+    return dv;
+  }
+  function words32(H) {
+    const out = new Uint8Array(H.length * 4), dv = new DataView(out.buffer);
+    H.forEach((h, i) => dv.setInt32(i * 4, h));
+    return out;
+  }
+
+  function sha1(msg) {
+    const dv = pad(msg, 64, 8), W = new Int32Array(80), H = H160.slice();
+    for (let o = 0; o < dv.byteLength; o += 64) {
+      for (let i = 0; i < 16; i++) W[i] = dv.getInt32(o + i * 4);
+      for (let i = 16; i < 80; i++) { const x = W[i - 3] ^ W[i - 8] ^ W[i - 14] ^ W[i - 16]; W[i] = x << 1 | x >>> 31; }
+      let a = H[0], b = H[1], c = H[2], d = H[3], e = H[4];
+      for (let i = 0; i < 80; i++) {
+        let f, k;
+        if (i < 20) { f = (b & c) | (~b & d); k = 0x5A827999; }
+        else if (i < 40) { f = b ^ c ^ d; k = 0x6ED9EBA1; }
+        else if (i < 60) { f = (b & c) | (b & d) | (c & d); k = 0x8F1BBCDC | 0; }
+        else { f = b ^ c ^ d; k = 0xCA62C1D6 | 0; }
+        const t = ((a << 5 | a >>> 27) + f + e + k + W[i]) | 0;
+        e = d; d = c; c = b << 30 | b >>> 2; b = a; a = t;
+      }
+      H[0] += a; H[1] += b; H[2] += c; H[3] += d; H[4] += e;
+    }
+    return words32(H);
+  }
+
+  function sha256(msg) {
+    const dv = pad(msg, 64, 8), W = new Int32Array(64), H = H256.slice();
+    for (let o = 0; o < dv.byteLength; o += 64) {
+      for (let i = 0; i < 16; i++) W[i] = dv.getInt32(o + i * 4);
+      for (let i = 16; i < 64; i++) {
+        const x = W[i - 15], y = W[i - 2];
+        const s0 = (x >>> 7 | x << 25) ^ (x >>> 18 | x << 14) ^ (x >>> 3);
+        const s1 = (y >>> 17 | y << 15) ^ (y >>> 19 | y << 13) ^ (y >>> 10);
+        W[i] = W[i - 16] + s0 + W[i - 7] + s1;
+      }
+      let a = H[0], b = H[1], c = H[2], d = H[3], e = H[4], f = H[5], g = H[6], h = H[7];
+      for (let i = 0; i < 64; i++) {
+        const S1 = (e >>> 6 | e << 26) ^ (e >>> 11 | e << 21) ^ (e >>> 25 | e << 7);
+        const t1 = (h + S1 + ((e & f) ^ (~e & g)) + K256[i] + W[i]) | 0;
+        const S0 = (a >>> 2 | a << 30) ^ (a >>> 13 | a << 19) ^ (a >>> 22 | a << 10);
+        const t2 = (S0 + ((a & b) ^ (a & c) ^ (b & c))) | 0;
+        h = g; g = f; f = e; e = (d + t1) | 0; d = c; c = b; b = a; a = (t1 + t2) | 0;
+      }
+      H[0] += a; H[1] += b; H[2] += c; H[3] += d; H[4] += e; H[5] += f; H[6] += g; H[7] += h;
+    }
+    return words32(H);
+  }
+
+  function sha512(msg) {
+    const dv = pad(msg, 128, 16), W = new Array(80), H = H512.slice();
+    const r = (x, n) => ((x >> n) | (x << (64n - n))) & M64;
+    for (let o = 0; o < dv.byteLength; o += 128) {
+      for (let i = 0; i < 16; i++) W[i] = dv.getBigUint64(o + i * 8);
+      for (let i = 16; i < 80; i++) {
+        const x = W[i - 15], y = W[i - 2];
+        W[i] = (W[i - 16] + (r(x, 1n) ^ r(x, 8n) ^ (x >> 7n)) + W[i - 7] + (r(y, 19n) ^ r(y, 61n) ^ (y >> 6n))) & M64;
+      }
+      let [a, b, c, d, e, f, g, h] = H;
+      for (let i = 0; i < 80; i++) {
+        const t1 = (h + (r(e, 14n) ^ r(e, 18n) ^ r(e, 41n)) + ((e & f) ^ (~e & g)) + K512[i] + W[i]) & M64;
+        const t2 = ((r(a, 28n) ^ r(a, 34n) ^ r(a, 39n)) + ((a & b) ^ (a & c) ^ (b & c))) & M64;
+        h = g; g = f; f = e; e = (d + t1) & M64; d = c; c = b; b = a; a = (t1 + t2) & M64;
+      }
+      [a, b, c, d, e, f, g, h].forEach((v, j) => { H[j] = (H[j] + v) & M64; });
+    }
+    const out = new Uint8Array(64), odv = new DataView(out.buffer);
+    H.forEach((h, i) => odv.setBigUint64(i * 8, h));
+    return out;
+  }
+
+  const HASHES = {
+    'SHA-1': { fn: sha1, block: 64 },
+    'SHA-256': { fn: sha256, block: 64 },
+    'SHA-512': { fn: sha512, block: 128 },
+  };
+
+  function hmac(name, key, msg) {
+    const { fn, block } = HASHES[name];
+    if (key.length > block) key = fn(key);
+    const k = new Uint8Array(block);
+    k.set(key);
+    const ipad = k.map(b => b ^ 0x36), opad = k.map(b => b ^ 0x5c);
+    return fn(concat(opad, fn(concat(ipad, msg))));
+  }
+
+  function pbkdf2Js(pass, salt, iter) { // PBKDF2-HMAC-SHA-256, 32-byte output
+    let u = hmac('SHA-256', pass, concat(salt, Uint8Array.of(0, 0, 0, 1)));
+    const t = u.slice();
+    for (let i = 1; i < iter; i++) {
+      u = hmac('SHA-256', pass, u);
+      for (let j = 0; j < 32; j++) t[j] ^= u[j];
+    }
+    return t;
+  }
+  async function pbkdf2(pass, salt, iter) {
+    try { // fast native path; falls back to pure JS if unavailable or it rejects the input
+      const s = globalThis.crypto && globalThis.crypto.subtle;
+      if (s) {
+        const key = await s.importKey('raw', pass, 'PBKDF2', false, ['deriveBits']);
+        return new Uint8Array(await s.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt, iterations: iter }, key, 256));
+      }
+    } catch (e) { /* use pure JS below */ }
+    return pbkdf2Js(pass, salt, iter);
+  }
+
+  // ---- Settings ----
+  const DEFAULTS = Object.freeze({
+    algo: 'SHA-256', iter: 100000,
+    trim: true, textCase: 'upper', strip: false,
+    order: 'is', sep: '',
+    charset: 'alnum', custom: '', length: 12,
+    noAmbig: true, noYZ: true, mix: true,
+    prefix: '', suffix: '',
+  });
+  const ALGOS = ['SHA-256', 'SHA-512', 'SHA-1', 'HMAC-SHA-256', 'HMAC-SHA-512', 'PBKDF2-SHA-256'];
+  const U = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', L = 'abcdefghijklmnopqrstuvwxyz', D = '0123456789';
+  const CHARSETS = {
+    alnum: U + L + D, upperdigits: U + D, lowerdigits: L + D, digits: D,
+    symbols: U + L + D + '!#$%*+-=?@_', hex: '0123456789abcdef', custom: '',
+  };
+  const CHOICES = { algo: ALGOS, textCase: ['keep', 'upper', 'lower'], order: ['is', 'si'], charset: Object.keys(CHARSETS) };
+  const LIMITS = { length: [4, 64], iter: [1000, 1000000] };
+  const MAXLEN = { sep: 16, custom: 256, prefix: 32, suffix: 32 };
+
+  function sanitize(o) {
+    const s = { ...DEFAULTS };
+    if (!o || typeof o !== 'object') return s;
+    for (const k of Object.keys(DEFAULTS)) {
+      const v = o[k];
+      if (typeof v !== typeof DEFAULTS[k]) continue;
+      if (CHOICES[k] && !CHOICES[k].includes(v)) continue;
+      if (LIMITS[k]) { if (!Number.isFinite(v)) continue; s[k] = Math.min(LIMITS[k][1], Math.max(LIMITS[k][0], Math.round(v))); continue; }
+      s[k] = MAXLEN[k] ? v.slice(0, MAXLEN[k]) : v;
+    }
+    return s;
+  }
+  // HMAC and PBKDF2 use the secret as a key, so order/separator do not apply
+  const isKeyed = s => s.algo === 'PBKDF2-SHA-256' || s.algo.startsWith('HMAC-');
+
+  // ---- Input normalisation ----
+  function normInput(str, s) {
+    str = String(str).normalize('NFC');
+    if (s.trim) str = str.trim();
+    if (s.strip) str = str.replace(/[\s\-]+/g, '');
+    if (s.textCase === 'upper') str = str.toUpperCase();
+    else if (s.textCase === 'lower') str = str.toLowerCase();
+    return str;
+  }
+  function normSecret(str, s) {
+    str = String(str).normalize('NFC');
+    return s.trim ? str.trim() : str;
+  }
+
+  // ---- Character set ----
+  const LOOKALIKES = ['0Oo', '1lI'];
+  function charsetChars(s) {
+    if (s.charset === 'hex') return [...CHARSETS.hex];
+    const src = s.charset === 'custom' ? s.custom.normalize('NFC') : CHARSETS[s.charset];
+    let c = [...new Set(Array.from(src))].filter(ch => !/\s/.test(ch));
+    if (s.noYZ) c = c.filter(ch => !'YyZz'.includes(ch));
+    if (s.noAmbig) {
+      // drop a look-alike group only when at least two of its members could be confused
+      for (const g of LOOKALIKES) if (c.filter(ch => g.includes(ch)).length > 1) c = c.filter(ch => !g.includes(ch));
+    }
+    return c.slice(0, 256);
+  }
+
+  // ---- Derivation ----
+  async function digest(input, secret, s) {
+    const msg = enc.encode(input), key = enc.encode(secret);
+    if (s.algo.startsWith('HMAC-')) return hmac(s.algo.slice(5), key, msg);
+    if (s.algo === 'PBKDF2-SHA-256') return pbkdf2(key, msg, s.iter);
+    const text = !secret ? input : s.order === 'is' ? input + s.sep + secret : secret + s.sep + input;
+    return HASHES[s.algo].fn(enc.encode(text));
+  }
+
+  // Endless byte stream: the digest, then SHA-256(digest || counter) blocks.
+  function byteStream(seed) {
+    let block = seed, k = 0, i = 0;
+    return () => {
+      if (i >= block.length) {
+        k++;
+        block = sha256(concat(seed, Uint8Array.of(k >>> 24, (k >>> 16) & 255, (k >>> 8) & 255, k & 255)));
+        i = 0;
+      }
+      return block[i++];
+    };
+  }
+
+  const CLASSES = [/[A-Z]/, /[a-z]/, /[0-9]/, /[^A-Za-z0-9]/];
+  function render(seed, s) {
+    const next = byteStream(seed);
+    if (s.charset === 'hex') {
+      let h = '';
+      while (h.length < s.length) h += next().toString(16).padStart(2, '0');
+      return h.slice(0, s.length);
+    }
+    const chars = charsetChars(s), n = chars.length;
+    if (n < 2) throw new Error('charset');
+    const limit = 256 - (256 % n); // rejection sampling keeps every character equally likely
+    const pick = () => { for (;;) { const b = next(); if (b < limit) return chars[b % n]; } };
+    const need = s.mix ? CLASSES.filter(re => chars.some(c => re.test(c))) : [];
+    let out = '';
+    for (let tries = 0; tries < 1000; tries++) {
+      out = '';
+      for (let i = 0; i < s.length; i++) out += pick();
+      if (need.length > s.length || need.every(re => re.test(out))) break;
+    }
+    return out;
+  }
+
+  async function generate(rawInput, rawSecret, settings) {
+    const s = sanitize(settings);
+    const input = normInput(rawInput, s);
+    if (!input) return '';
+    const secret = normSecret(rawSecret, s);
+    return s.prefix + render(await digest(input, secret, s), s) + s.suffix;
+  }
+
+  // ---- Profile code: "JP1-" + base64url(JSON of non-default settings) ----
+  const b64uEnc = bytes => btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const b64uDec = str => Uint8Array.from(atob(str.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
+  function diff(settings) {
+    const s = sanitize(settings), d = {};
+    for (const k of Object.keys(DEFAULTS)) if (s[k] !== DEFAULTS[k]) d[k] = s[k];
+    return d;
+  }
+  const profileEncode = settings => 'JP1-' + b64uEnc(enc.encode(JSON.stringify(diff(settings))));
+  function profileDecode(code) {
+    const m = /^JP1-([A-Za-z0-9_-]+)$/.exec(String(code).trim());
+    if (!m) throw new Error('profile');
+    const obj = JSON.parse(new TextDecoder().decode(b64uDec(m[1])));
+    if (!obj || typeof obj !== 'object' || Array.isArray(obj)) throw new Error('profile');
+    return sanitize(obj);
+  }
+
+  return {
+    DEFAULTS, ALGOS, CHARSETS, sanitize, isKeyed, diff, charsetChars, normInput, normSecret,
+    generate, profileEncode, profileDecode, sha1, sha256, sha512, hmac, pbkdf2, pbkdf2Js,
+  };
+})();
+/* JP-CORE-END */
+</script>
+
+<script>
+const I18N = {
+  sk: {
+    tagline: 'Rovnaké heslo z rovnakého vstupu. Kedykoľvek, offline.',
+    language: 'Jazyk',
+    theme_auto: 'Motív: podľa systému', theme_light: 'Motív: svetlý', theme_dark: 'Motív: tmavý',
+    inputLabel: 'Vstup', inputPh: 'napr. sériové číslo zariadenia',
+    secretLabel: 'Tajomstvo', secretPh: 'vaše tajné slovo alebo fráza',
+    warnNoSecret: 'Bez tajomstva vypočíta rovnaké heslo ktokoľvek, kto pozná vstup (napr. sériové číslo zo štítku).',
+    hintSecret: 'Tajomstvo si dobre zapamätajte – bez neho rovnaké heslo znovu nevytvoríte.',
+    outputLabel: 'Heslo', outputPh: 'Tu sa zobrazí heslo',
+    copy: 'Kopírovať', copied: 'Skopírované', copyFail: 'Nepodarilo sa skopírovať',
+    show: 'Zobraziť', hide: 'Skryť', busy: 'Počítam…',
+    errCharset: 'Príliš málo znakov na vytvorenie hesla. Upravte sadu znakov.',
+    advanced: 'Rozšírené nastavenia',
+    advNote: 'Nepovinné. Každá zmena tu zmení aj vygenerované heslá – nastavenia si preto uložte pomocou kódu profilu.',
+    customActive: 'Používajú sa vlastné nastavenia',
+    grpInput: 'Úprava vstupu',
+    trim: 'Odstrániť medzery na začiatku a na konci',
+    strip: 'Odstrániť všetky medzery a pomlčky vo vstupe',
+    textCase: 'Veľkosť písmen vstupu', case_keep: 'Ponechať', case_upper: 'VEĽKÉ', case_lower: 'malé',
+    grpAlgo: 'Algoritmus',
+    algo: 'Hašovacia funkcia',
+    algo_default: 'predvolené', algo_legacy: 'zastarané', algo_slow: 'pomalé, najodolnejšie',
+    iter: 'Počet iterácií',
+    order: 'Poradie', order_is: 'vstup + tajomstvo', order_si: 'tajomstvo + vstup',
+    sep: 'Oddeľovač', sepPh: 'žiadny',
+    keyedNote: 'Pri HMAC a PBKDF2 sa tajomstvo použije ako kľúč, poradie a oddeľovač sa preto neuplatnia.',
+    grpOutput: 'Výstup',
+    charset: 'Znaky',
+    cs_alnum: 'Písmená a číslice', cs_upperdigits: 'Veľké písmená a číslice', cs_lowerdigits: 'Malé písmená a číslice',
+    cs_digits: 'Len číslice (PIN)', cs_symbols: 'Písmená, číslice a symboly', cs_hex: 'Hex (0–9, a–f)', cs_custom: 'Vlastné znaky',
+    custom: 'Vlastná sada znakov', customPh: 'napr. ABCDEF123456',
+    length: 'Dĺžka',
+    noAmbig: 'Vynechať zameniteľné znaky (0/O/o, 1/l/I)',
+    noYZ: 'Vynechať Y a Z (BIOS používa anglickú klávesnicu, kde sú Y a Z prehodené)',
+    mix: 'Aspoň jedno veľké písmeno, malé písmeno a číslica',
+    symWarn: 'Pozor: v BIOSe sa symboly na slovenskej klávesnici píšu inými klávesmi než vo Windows.',
+    prefix: 'Predpona', suffix: 'Prípona',
+    affixNote: 'Predpona a prípona sa pridajú k heslu a nezapočítavajú sa do dĺžky.',
+    grpDisplay: 'Zobrazenie',
+    group: 'Zobraziť heslo po skupinách 4 znakov (kopíruje sa bez medzier)',
+    grpProfile: 'Kód profilu',
+    profileHelp: 'Kód obsahuje všetky rozšírené nastavenia (nie vstup ani tajomstvo). Uložte si ho a vložte na inom zariadení, aby ste dostali rovnaké heslá.',
+    profileIn: 'Vložte kód profilu', apply: 'Použiť',
+    profileOk: 'Profil bol načítaný.', profileBad: 'Neplatný kód profilu.',
+    reset: 'Obnoviť predvolené', resetDone: 'Nastavenia boli obnovené.',
+    footer: 'Funguje offline. Nič sa neodosiela – všetko sa počíta vo vašom prehliadači.',
+    openSource: 'open source (MIT)',
+    sumSecretYes: 's tajomstvom', sumSecretNo: 'bez tajomstva', sumLen: 'dĺžka {n}',
+    sumUpper: 'VEĽKÉ', sumLower: 'malé', sumTrim: 'orezané', sumStrip: 'bez medzier/pomlčiek',
+    sumNoAmbig: 'bez 0/O 1/l/I', sumNoYZ: 'bez Y/Z', sumMix: 'zmiešané', sumOrderSI: 'tajomstvo+vstup',
+    sumSep: 'oddeľovač', sumPrefix: 'predpona', sumSuffix: 'prípona', sumCustom: 'vlastné ({n})',
+  },
+  en: {
+    tagline: 'The same password from the same input. Anytime, offline.',
+    language: 'Language',
+    theme_auto: 'Theme: system', theme_light: 'Theme: light', theme_dark: 'Theme: dark',
+    inputLabel: 'Input', inputPh: 'e.g. device serial number',
+    secretLabel: 'Secret', secretPh: 'your secret word or phrase',
+    warnNoSecret: 'Without a secret, anyone who knows the input (e.g. the serial number on the label) can compute the same password.',
+    hintSecret: 'Remember your secret well – without it you cannot recreate the same password.',
+    outputLabel: 'Password', outputPh: 'Your password will appear here',
+    copy: 'Copy', copied: 'Copied', copyFail: 'Could not copy',
+    show: 'Show', hide: 'Hide', busy: 'Computing…',
+    errCharset: 'Too few characters to build a password. Adjust the character set.',
+    advanced: 'Advanced settings',
+    advNote: 'Optional. Any change here also changes the generated passwords – save your settings with the profile code.',
+    customActive: 'Custom settings are active',
+    grpInput: 'Input clean-up',
+    trim: 'Remove spaces at the start and end',
+    strip: 'Remove all spaces and dashes from the input',
+    textCase: 'Input letter case', case_keep: 'Keep', case_upper: 'UPPERCASE', case_lower: 'lowercase',
+    grpAlgo: 'Algorithm',
+    algo: 'Hash function',
+    algo_default: 'default', algo_legacy: 'legacy', algo_slow: 'slow, most resistant',
+    iter: 'Iterations',
+    order: 'Order', order_is: 'input + secret', order_si: 'secret + input',
+    sep: 'Separator', sepPh: 'none',
+    keyedNote: 'With HMAC and PBKDF2 the secret is used as the key, so order and separator do not apply.',
+    grpOutput: 'Output',
+    charset: 'Characters',
+    cs_alnum: 'Letters and digits', cs_upperdigits: 'Uppercase letters and digits', cs_lowerdigits: 'Lowercase letters and digits',
+    cs_digits: 'Digits only (PIN)', cs_symbols: 'Letters, digits and symbols', cs_hex: 'Hex (0–9, a–f)', cs_custom: 'Custom characters',
+    custom: 'Custom character set', customPh: 'e.g. ABCDEF123456',
+    length: 'Length',
+    noAmbig: 'Skip look-alike characters (0/O/o, 1/l/I)',
+    noYZ: 'Skip Y and Z (BIOS uses a US keyboard; Y and Z are swapped on QWERTZ keyboards)',
+    mix: 'At least one uppercase letter, lowercase letter and digit',
+    symWarn: 'Note: in the BIOS, symbols may sit on different keys than on your keyboard layout in Windows.',
+    prefix: 'Prefix', suffix: 'Suffix',
+    affixNote: 'Prefix and suffix are added to the password and do not count towards the length.',
+    grpDisplay: 'Display',
+    group: 'Show the password in groups of 4 (copied without spaces)',
+    grpProfile: 'Profile code',
+    profileHelp: 'The code contains all advanced settings (not the input or secret). Save it and paste it on another device to get the same passwords.',
+    profileIn: 'Paste a profile code', apply: 'Apply',
+    profileOk: 'Profile loaded.', profileBad: 'Invalid profile code.',
+    reset: 'Restore defaults', resetDone: 'Settings restored.',
+    footer: 'Works offline. Nothing is sent anywhere – everything is computed in your browser.',
+    openSource: 'open source (MIT)',
+    sumSecretYes: 'with secret', sumSecretNo: 'no secret', sumLen: 'length {n}',
+    sumUpper: 'UPPER', sumLower: 'lower', sumTrim: 'trimmed', sumStrip: 'no spaces/dashes',
+    sumNoAmbig: 'no 0/O 1/l/I', sumNoYZ: 'no Y/Z', sumMix: 'mixed', sumOrderSI: 'secret+input',
+    sumSep: 'separator', sumPrefix: 'prefix', sumSuffix: 'suffix', sumCustom: 'custom ({n})',
+  },
+  de: {
+    tagline: 'Dasselbe Passwort aus derselben Eingabe. Jederzeit, offline.',
+    language: 'Sprache',
+    theme_auto: 'Design: wie System', theme_light: 'Design: hell', theme_dark: 'Design: dunkel',
+    inputLabel: 'Eingabe', inputPh: 'z. B. Seriennummer des Geräts',
+    secretLabel: 'Geheimnis', secretPh: 'Ihr geheimes Wort oder Ihre Passphrase',
+    warnNoSecret: 'Ohne Geheimnis kann jeder, der die Eingabe kennt (z. B. die Seriennummer auf dem Etikett), dasselbe Passwort berechnen.',
+    hintSecret: 'Merken Sie sich das Geheimnis gut – ohne es lässt sich dasselbe Passwort nicht wieder erzeugen.',
+    outputLabel: 'Passwort', outputPh: 'Hier erscheint Ihr Passwort',
+    copy: 'Kopieren', copied: 'Kopiert', copyFail: 'Kopieren fehlgeschlagen',
+    show: 'Anzeigen', hide: 'Verbergen', busy: 'Berechne…',
+    errCharset: 'Zu wenige Zeichen für ein Passwort. Passen Sie den Zeichensatz an.',
+    advanced: 'Erweiterte Einstellungen',
+    advNote: 'Optional. Jede Änderung hier ändert auch die erzeugten Passwörter – speichern Sie die Einstellungen mit dem Profilcode.',
+    customActive: 'Eigene Einstellungen sind aktiv',
+    grpInput: 'Eingabe bereinigen',
+    trim: 'Leerzeichen am Anfang und Ende entfernen',
+    strip: 'Alle Leerzeichen und Bindestriche aus der Eingabe entfernen',
+    textCase: 'Groß-/Kleinschreibung', case_keep: 'Beibehalten', case_upper: 'GROSS', case_lower: 'klein',
+    grpAlgo: 'Algorithmus',
+    algo: 'Hashfunktion',
+    algo_default: 'Standard', algo_legacy: 'veraltet', algo_slow: 'langsam, am widerstandsfähigsten',
+    iter: 'Iterationen',
+    order: 'Reihenfolge', order_is: 'Eingabe + Geheimnis', order_si: 'Geheimnis + Eingabe',
+    sep: 'Trennzeichen', sepPh: 'keines',
+    keyedNote: 'Bei HMAC und PBKDF2 dient das Geheimnis als Schlüssel, daher gelten Reihenfolge und Trennzeichen nicht.',
+    grpOutput: 'Ausgabe',
+    charset: 'Zeichen',
+    cs_alnum: 'Buchstaben und Ziffern', cs_upperdigits: 'Großbuchstaben und Ziffern', cs_lowerdigits: 'Kleinbuchstaben und Ziffern',
+    cs_digits: 'Nur Ziffern (PIN)', cs_symbols: 'Buchstaben, Ziffern und Symbole', cs_hex: 'Hex (0–9, a–f)', cs_custom: 'Eigene Zeichen',
+    custom: 'Eigener Zeichensatz', customPh: 'z. B. ABCDEF123456',
+    length: 'Länge',
+    noAmbig: 'Verwechselbare Zeichen weglassen (0/O/o, 1/l/I)',
+    noYZ: 'Y und Z weglassen (das BIOS nutzt eine US-Tastatur, auf QWERTZ sind Y und Z vertauscht)',
+    mix: 'Mindestens ein Groß-, ein Kleinbuchstabe und eine Ziffer',
+    symWarn: 'Achtung: Im BIOS liegen Symbole auf einer deutschen Tastatur oft auf anderen Tasten als in Windows.',
+    prefix: 'Präfix', suffix: 'Suffix',
+    affixNote: 'Präfix und Suffix werden an das Passwort angefügt und zählen nicht zur Länge.',
+    grpDisplay: 'Anzeige',
+    group: 'Passwort in Vierergruppen anzeigen (wird ohne Leerzeichen kopiert)',
+    grpProfile: 'Profilcode',
+    profileHelp: 'Der Code enthält alle erweiterten Einstellungen (nicht Eingabe oder Geheimnis). Speichern Sie ihn und fügen Sie ihn auf einem anderen Gerät ein, um dieselben Passwörter zu erhalten.',
+    profileIn: 'Profilcode einfügen', apply: 'Übernehmen',
+    profileOk: 'Profil geladen.', profileBad: 'Ungültiger Profilcode.',
+    reset: 'Standard wiederherstellen', resetDone: 'Einstellungen zurückgesetzt.',
+    footer: 'Funktioniert offline. Nichts wird gesendet – alles wird in Ihrem Browser berechnet.',
+    openSource: 'Open Source (MIT)',
+    sumSecretYes: 'mit Geheimnis', sumSecretNo: 'ohne Geheimnis', sumLen: 'Länge {n}',
+    sumUpper: 'GROSS', sumLower: 'klein', sumTrim: 'getrimmt', sumStrip: 'ohne Leerz./Bindestriche',
+    sumNoAmbig: 'ohne 0/O 1/l/I', sumNoYZ: 'ohne Y/Z', sumMix: 'gemischt', sumOrderSI: 'Geheimnis+Eingabe',
+    sumSep: 'Trennzeichen', sumPrefix: 'Präfix', sumSuffix: 'Suffix', sumCustom: 'eigene ({n})',
+  },
+  es: {
+    tagline: 'La misma contraseña a partir de la misma entrada. Siempre, sin conexión.',
+    language: 'Idioma',
+    theme_auto: 'Tema: según el sistema', theme_light: 'Tema: claro', theme_dark: 'Tema: oscuro',
+    inputLabel: 'Entrada', inputPh: 'p. ej., número de serie del dispositivo',
+    secretLabel: 'Secreto', secretPh: 'su palabra o frase secreta',
+    warnNoSecret: 'Sin un secreto, cualquiera que conozca la entrada (p. ej., el número de serie de la etiqueta) puede calcular la misma contraseña.',
+    hintSecret: 'Recuerde bien su secreto: sin él no podrá volver a generar la misma contraseña.',
+    outputLabel: 'Contraseña', outputPh: 'Aquí aparecerá su contraseña',
+    copy: 'Copiar', copied: 'Copiado', copyFail: 'No se pudo copiar',
+    show: 'Mostrar', hide: 'Ocultar', busy: 'Calculando…',
+    errCharset: 'Muy pocos caracteres para crear una contraseña. Ajuste el conjunto de caracteres.',
+    advanced: 'Configuración avanzada',
+    advNote: 'Opcional. Cualquier cambio aquí también cambia las contraseñas generadas; guarde la configuración con el código de perfil.',
+    customActive: 'Hay una configuración personalizada activa',
+    grpInput: 'Limpieza de la entrada',
+    trim: 'Quitar espacios al principio y al final',
+    strip: 'Quitar todos los espacios y guiones de la entrada',
+    textCase: 'Mayúsculas/minúsculas', case_keep: 'Mantener', case_upper: 'MAYÚSCULAS', case_lower: 'minúsculas',
+    grpAlgo: 'Algoritmo',
+    algo: 'Función hash',
+    algo_default: 'predeterminado', algo_legacy: 'obsoleto', algo_slow: 'lento, el más resistente',
+    iter: 'Iteraciones',
+    order: 'Orden', order_is: 'entrada + secreto', order_si: 'secreto + entrada',
+    sep: 'Separador', sepPh: 'ninguno',
+    keyedNote: 'Con HMAC y PBKDF2 el secreto se usa como clave, por lo que el orden y el separador no se aplican.',
+    grpOutput: 'Salida',
+    charset: 'Caracteres',
+    cs_alnum: 'Letras y números', cs_upperdigits: 'Mayúsculas y números', cs_lowerdigits: 'Minúsculas y números',
+    cs_digits: 'Solo números (PIN)', cs_symbols: 'Letras, números y símbolos', cs_hex: 'Hex (0–9, a–f)', cs_custom: 'Caracteres propios',
+    custom: 'Conjunto propio', customPh: 'p. ej., ABCDEF123456',
+    length: 'Longitud',
+    noAmbig: 'Omitir caracteres que se confunden (0/O/o, 1/l/I)',
+    noYZ: 'Omitir Y y Z (la BIOS usa teclado inglés; en teclados QWERTZ Y y Z están intercambiadas)',
+    mix: 'Al menos una mayúscula, una minúscula y un número',
+    symWarn: 'Atención: en la BIOS, los símbolos de un teclado español suelen estar en otras teclas que en Windows.',
+    prefix: 'Prefijo', suffix: 'Sufijo',
+    affixNote: 'El prefijo y el sufijo se añaden a la contraseña y no cuentan en la longitud.',
+    grpDisplay: 'Visualización',
+    group: 'Mostrar la contraseña en grupos de 4 (se copia sin espacios)',
+    grpProfile: 'Código de perfil',
+    profileHelp: 'El código contiene toda la configuración avanzada (no la entrada ni el secreto). Guárdelo y péguelo en otro dispositivo para obtener las mismas contraseñas.',
+    profileIn: 'Pegue un código de perfil', apply: 'Aplicar',
+    profileOk: 'Perfil cargado.', profileBad: 'Código de perfil no válido.',
+    reset: 'Restaurar valores predeterminados', resetDone: 'Configuración restaurada.',
+    footer: 'Funciona sin conexión. No se envía nada: todo se calcula en su navegador.',
+    openSource: 'código abierto (MIT)',
+    sumSecretYes: 'con secreto', sumSecretNo: 'sin secreto', sumLen: 'longitud {n}',
+    sumUpper: 'MAYÚSC.', sumLower: 'minúsc.', sumTrim: 'recortado', sumStrip: 'sin espacios/guiones',
+    sumNoAmbig: 'sin 0/O 1/l/I', sumNoYZ: 'sin Y/Z', sumMix: 'mixto', sumOrderSI: 'secreto+entrada',
+    sumSep: 'separador', sumPrefix: 'prefijo', sumSuffix: 'sufijo', sumCustom: 'propios ({n})',
+  },
+};
+
+(() => {
+  'use strict';
+  const $ = (s, r = document) => r.querySelector(s);
+  const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem('jetpass.' + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
+    set(k, v) { try { localStorage.setItem('jetpass.' + k, JSON.stringify(v)); } catch (e) { /* storage unavailable */ } },
+  };
+
+  let lang = I18N[store.get('lang')] ? store.get('lang') : 'sk';
+  let settings = JP.sanitize(store.get('settings', {}));
+  let theme = ['auto', 'light', 'dark'].includes(store.get('theme')) ? store.get('theme') : 'auto';
+  let group = store.get('group', true) !== false;
+  let current = '', outState = 'empty', seq = 0, timer = 0;
+  const visible = { input: true, secret: false, output: true };
+
+  const el = {
+    input: $('#input'), secret: $('#secret'), output: $('#output'), copyBtn: $('#copyBtn'), copyText: $('#copyText'),
+    summary: $('#summary'), notice: $('#secretNotice'), noticeText: $('#secretNoticeText'), logo: $('#logo'),
+    adv: $('#adv'), advBtn: $('#advBtn'), advDot: $('#advDot'), lang: $('#lang'), themeBtn: $('#themeBtn'),
+    algo: $('#s-algo'), profileOut: $('#profileOut'), profileIn: $('#profileIn'), profileStatus: $('#profileStatus'),
+  };
+
+  const t = (k, vars) => {
+    let s = I18N[lang][k] ?? I18N.en[k] ?? k;
+    if (vars) for (const v in vars) s = s.replace('{' + v + '}', vars[v]);
+    return s;
+  };
+
+  // ---- i18n ----
+  function applyLang() {
+    document.documentElement.lang = lang;
+    el.lang.value = lang;
+    $$('[data-i18n]').forEach(n => { n.textContent = t(n.dataset.i18n); });
+    $$('[data-i18n-ph]').forEach(n => { n.placeholder = t(n.dataset.i18nPh); });
+    $$('[data-i18n-title]').forEach(n => { n.title = t(n.dataset.i18nTitle); n.setAttribute('aria-label', n.title); });
+    const notes = { 'SHA-256': 'algo_default', 'SHA-1': 'algo_legacy', 'PBKDF2-SHA-256': 'algo_slow' };
+    el.algo.replaceChildren(...JP.ALGOS.map(a => new Option(notes[a] ? `${a} (${t(notes[a])})` : a, a)));
+    el.algo.value = settings.algo;
+    updateEyes(); updateTheme(); refresh();
+    if (!el.copyBtn.classList.contains('done')) el.copyText.textContent = t('copy');
+  }
+
+  // ---- Theme ----
+  function updateTheme() {
+    if (theme === 'auto') document.documentElement.removeAttribute('data-theme');
+    else document.documentElement.dataset.theme = theme;
+    el.themeBtn.dataset.mode = theme;
+    el.themeBtn.title = t('theme_' + theme);
+    el.themeBtn.setAttribute('aria-label', el.themeBtn.title);
+  }
+  el.themeBtn.addEventListener('click', () => {
+    theme = { auto: 'light', light: 'dark', dark: 'auto' }[theme];
+    store.set('theme', theme); updateTheme();
+  });
+  el.lang.addEventListener('change', () => { lang = el.lang.value; store.set('lang', lang); applyLang(); });
+
+  // ---- Show / hide ----
+  function updateEyes() {
+    $$('[data-eye]').forEach(b => {
+      const k = b.dataset.eye;
+      b.setAttribute('aria-pressed', String(visible[k]));
+      b.title = visible[k] ? t('hide') : t('show');
+      b.setAttribute('aria-label', b.title);
+      if (el[k] instanceof HTMLInputElement) el[k].type = visible[k] ? 'text' : 'password';
+    });
+  }
+  $$('[data-eye]').forEach(b => b.addEventListener('click', () => {
+    visible[b.dataset.eye] = !visible[b.dataset.eye];
+    updateEyes();
+    if (b.dataset.eye === 'output') paintOutput(false);
+  }));
+
+  // ---- Advanced panel ----
+  function setAdv(open) {
+    el.adv.classList.toggle('open', open);
+    el.adv.inert = !open;
+    el.advBtn.setAttribute('aria-expanded', String(open));
+    store.set('adv', open);
+  }
+  el.advBtn.addEventListener('click', () => setAdv(!el.adv.classList.contains('open')));
+
+  $$('[data-set]').forEach(n => {
+    const evt = n.type === 'number' ? 'change' : 'input';
+    n.addEventListener(evt, () => {
+      const k = n.dataset.set;
+      const v = n.type === 'checkbox' ? n.checked : typeof JP.DEFAULTS[k] === 'number' ? Number(n.value) : n.value;
+      settings = JP.sanitize({ ...settings, [k]: v });
+      store.set('settings', settings);
+      el.profileStatus.textContent = '';
+      refresh(n);
+    });
+  });
+  const groupChk = $('#groupChk');
+  groupChk.addEventListener('change', () => { group = groupChk.checked; store.set('group', group); paintOutput(false); });
+
+  function syncControls(except) {
+    $$('[data-set]').forEach(n => {
+      if (n === except) return;
+      const v = settings[n.dataset.set];
+      if (n.type === 'checkbox') n.checked = v;
+      else if (n.value !== String(v)) n.value = v;
+    });
+    groupChk.checked = group;
+    const s = settings, hex = s.charset === 'hex', keyed = JP.isKeyed(s);
+    $('#iterRow').hidden = s.algo !== 'PBKDF2-SHA-256';
+    $('#customRow').hidden = s.charset !== 'custom';
+    $('#s-order').disabled = keyed;
+    $('#s-sep').disabled = keyed;
+    $('#keyedNote').hidden = !keyed;
+    $('#symWarn').hidden = !(s.charset === 'symbols' || s.charset === 'custom');
+    ['noAmbig', 'noYZ', 'mix'].forEach(k => {
+      $('#c-' + k).classList.toggle('disabled', hex);
+      $(`[data-set="${k}"]`).disabled = hex;
+    });
+  }
+
+  // ---- Summary line ----
+  const CS_SHORT = { alnum: 'A–Z a–z 0–9', upperdigits: 'A–Z 0–9', lowerdigits: 'a–z 0–9', digits: '0–9', symbols: 'A–Z a–z 0–9 !#$…', hex: 'hex' };
+  function summary() {
+    const s = settings, hasSecret = !!JP.normSecret(el.secret.value, s);
+    const p = [s.algo === 'PBKDF2-SHA-256' ? `${s.algo} ×${s.iter.toLocaleString(lang)}` : s.algo];
+    p.push(hasSecret ? t('sumSecretYes') : t('sumSecretNo'));
+    if (hasSecret && !JP.isKeyed(s)) {
+      if (s.order === 'si') p.push(t('sumOrderSI'));
+      if (s.sep) p.push(`${t('sumSep')} "${s.sep}"`);
+    }
+    p.push(s.charset === 'custom' ? t('sumCustom', { n: JP.charsetChars(s).length }) : CS_SHORT[s.charset]);
+    p.push(t('sumLen', { n: s.length }));
+    if (s.textCase === 'upper') p.push(t('sumUpper'));
+    if (s.textCase === 'lower') p.push(t('sumLower'));
+    if (s.trim) p.push(t('sumTrim'));
+    if (s.strip) p.push(t('sumStrip'));
+    if (s.charset !== 'hex') {
+      if (s.noAmbig) p.push(t('sumNoAmbig'));
+      if (s.noYZ) p.push(t('sumNoYZ'));
+      if (s.mix) p.push(t('sumMix'));
+    }
+    if (s.prefix) p.push(`${t('sumPrefix')} "${s.prefix}"`);
+    if (s.suffix) p.push(`${t('sumSuffix')} "${s.suffix}"`);
+    return p.join(' · ');
+  }
+
+  function updateNotice() {
+    const has = !!JP.normSecret(el.secret.value, settings);
+    el.notice.className = 'notice ' + (has ? 'ok' : 'warn');
+    el.noticeText.textContent = has ? t('hintSecret') : t('warnNoSecret');
+  }
+
+  function refresh(except) {
+    syncControls(except);
+    updateNotice();
+    el.summary.textContent = summary();
+    el.profileOut.value = JP.profileEncode(settings);
+    const custom = Object.keys(JP.diff(settings)).length > 0;
+    el.advDot.hidden = !custom;
+    el.advBtn.title = t('advanced') + (custom ? ' – ' + t('customActive') : '');
+    el.advBtn.setAttribute('aria-label', el.advBtn.title);
+    schedule();
+  }
+
+  // ---- Generation ----
+  function schedule() {
+    clearTimeout(timer);
+    timer = setTimeout(run, settings.algo === 'PBKDF2-SHA-256' ? 250 : 0);
+  }
+  async function run() {
+    const my = ++seq, before = current;
+    if (!JP.normInput(el.input.value, settings)) { setOutput('', 'empty'); return; }
+    if (settings.algo === 'PBKDF2-SHA-256') setOutput('', 'busy');
+    try {
+      const pw = await JP.generate(el.input.value, el.secret.value, settings);
+      if (my !== seq) return;
+      setOutput(pw, pw ? 'ok' : 'empty', pw !== before);
+    } catch (e) {
+      if (my === seq) setOutput('', 'error');
+    }
+  }
+  function setOutput(pw, state, animate) {
+    current = pw; outState = state;
+    el.copyBtn.disabled = !pw;
+    paintOutput(animate);
+  }
+  function paintOutput(animate) {
+    const o = el.output;
+    o.className = '';
+    o.replaceChildren();
+    if (outState !== 'ok') {
+      o.classList.add(outState === 'error' ? 'error' : outState === 'busy' ? 'busy' : 'placeholder');
+      o.textContent = outState === 'error' ? t('errCharset') : outState === 'busy' ? t('busy') : t('outputPh');
+      return;
+    }
+    const chars = visible.output ? Array.from(current) : Array(Math.min(Array.from(current).length, 64)).fill('•');
+    const size = group ? 4 : chars.length;
+    for (let i = 0; i < chars.length; i += size) {
+      const g = document.createElement('span');
+      g.className = 'g';
+      for (const ch of chars.slice(i, i + size)) {
+        const c = document.createElement('span');
+        if (/[0-9]/.test(ch)) c.className = 'd';
+        else if (!/[\p{L}•]/u.test(ch)) c.className = 's';
+        c.textContent = ch;
+        g.append(c);
+      }
+      o.append(g);
+    }
+    if (animate) {
+      void o.offsetWidth;
+      o.classList.add('pop');
+      el.logo.classList.remove('fly'); void el.logo.getBoundingClientRect(); el.logo.classList.add('fly');
+    }
+  }
+  el.logo.addEventListener('animationend', e => { if (e.animationName === 'fly') el.logo.classList.remove('fly'); });
+  el.input.addEventListener('input', () => { el.summary.textContent = summary(); schedule(); });
+  el.secret.addEventListener('input', () => { updateNotice(); el.summary.textContent = summary(); schedule(); });
+
+  // ---- Clipboard ----
+  async function copyText(text) {
+    try { await navigator.clipboard.writeText(text); return true; } catch (e) { /* fall back below */ }
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.setAttribute('readonly', ''); ta.style.cssText = 'position:fixed;top:-1000px;opacity:0';
+    document.body.append(ta); ta.select();
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+    ta.remove();
+    return ok;
+  }
+  let copyTimer = 0;
+  el.copyBtn.addEventListener('click', async () => {
+    if (!current) return;
+    const ok = await copyText(current);
+    clearTimeout(copyTimer);
+    el.copyBtn.classList.toggle('done', ok);
+    el.copyText.textContent = ok ? t('copied') : t('copyFail');
+    copyTimer = setTimeout(() => { el.copyBtn.classList.remove('done'); el.copyText.textContent = t('copy'); }, 1800);
+  });
+
+  // ---- Profile code ----
+  const status = (msg, cls) => { el.profileStatus.textContent = msg; el.profileStatus.className = 'status ' + cls; };
+  $('#copyProfile').addEventListener('click', async () => { status((await copyText(el.profileOut.value)) ? t('copied') : t('copyFail'), 'ok'); });
+  $('#applyProfile').addEventListener('click', () => {
+    try {
+      settings = JP.profileDecode(el.profileIn.value);
+      store.set('settings', settings);
+      el.algo.value = settings.algo;
+      el.profileIn.value = '';
+      status(t('profileOk'), 'ok');
+      refresh();
+    } catch (e) { status(t('profileBad'), 'bad'); }
+  });
+  el.profileIn.addEventListener('keydown', e => { if (e.key === 'Enter') $('#applyProfile').click(); });
+  $('#resetBtn').addEventListener('click', () => {
+    settings = JP.sanitize({});
+    store.set('settings', settings);
+    status(t('resetDone'), 'ok');
+    refresh();
+  });
+
+  // ---- Start ----
+  setAdv(store.get('adv', false) === true);
+  applyLang();
+  el.input.focus();
+})();
+</script>
+</body>
+</html>
